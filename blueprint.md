@@ -1,32 +1,48 @@
 
-# Blueprint: Flutter Cupertino Counter App
+# Blueprint: Calculadora Flutter com Identidade "Sidecar"
 
 ## Visão Geral
 
-Este documento descreve o projeto de um aplicativo Flutter construído com foco no design Cupertino (iOS). O objetivo é criar uma aplicação visualmente atraente, moderna e funcional, seguindo as melhores práticas de desenvolvimento e design.
+Este documento descreve o projeto de um aplicativo de calculadora para Flutter. O objetivo é criar uma aplicação funcional, intuitiva e com uma identidade visual única, que, embora inspirada por princípios de design modernos, se diferencia dos layouts padrão de calculadoras de sistemas operacionais.
 
-## Design e Recursos Implementados (Versão Inicial)
+O aplicativo utiliza o pacote `provider` para um gerenciamento de estado limpo e eficiente.
 
-*   **Estrutura do Projeto**:
-    *   Configurado para ser um projeto Flutter multiplataforma, com suporte para Web, Android e **iOS**.
-    *   A pasta `ios` foi gerada para garantir a compatibilidade e a compilação nativa em ambientes macOS.
-*   **Tema Visual (UI)**:
-    *   O aplicativo foi configurado para usar `CupertinoApp` como raiz, forçando a renderização de widgets com o estilo do iOS.
-    *   A tela principal utiliza `CupertinoPageScaffold` e `CupertinoNavigationBar` para a estrutura básica da página.
-*   **Funcionalidade Principal**:
-    *   Uma tela de contador simples que exibe um número.
-    *   Um botão de incremento (`CupertinoButton.filled`) para aumentar o contador.
-    *   Um botão de "reset" (`CupertinoIcons.restart`) na barra de navegação para zerar o contador.
+---
 
-## Plano de Melhoria Atual: Refinamento da UI
+## Design e Recursos Implementados
 
-O objetivo desta etapa é transformar a tela básica do contador em uma interface mais polida e esteticamente agradável, abraçando os padrões de design do iOS.
+### Identidade Visual: O Layout "Sidecar"
 
-1.  **Estruturar com `CupertinoListSection`**: Substituir o layout `Column` simples por um `CupertinoListSection.insetGrouped`. Isso agrupará os elementos do contador dentro de um cartão com cantos arredondados, um padrão de design muito comum no iOS.
-2.  **Melhorar a Interação**:
-    *   Transformar o display do contador em uma linha (`CupertinoListTile`) contendo o rótulo "Contagem" e o valor.
-    *   Substituir o único botão "Increment" por uma linha de botões de Ação (`CupertinoListTile`) com ícones para "Aumentar" (`+`) e "Diminuir" (`-`), tornando a interação mais clara e completa.
-3.  **Aprimorar o Estilo Visual**:
-    *   Utilizar `CupertinoColors` para dar um toque de cor aos ícones e botões.
-    *   Ajustar a tipografia para criar um contraste mais agradável entre os rótulos e os valores.
+A principal característica do design é o layout "Sidecar", que organiza os botões em uma grade 5x5 consistente, dividida em duas áreas funcionais.
 
+1.  **Grid Principal (4 colunas à esquerda):** Contém todas as operações de cálculo do dia a dia.
+    *   Números (0-9)
+    *   Operadores aritméticos (`÷`, `×`, `-`, `+`, `=`)
+    *   Funções essenciais (`%`, `±`)
+    *   O botão inteligente `AC/C`
+
+2.  **Coluna "Sidecar" (1 coluna à direita):** Uma "coluna de poder" dedicada exclusivamente às funções de memória, criando um fluxo de trabalho claro e separado para armazenamento de valores.
+    *   `MC` (Memory Clear)
+    *   `MR` (Memory Recall)
+    *   `M+` (Memory Add)
+    *   `M-` (Memory Subtract)
+    *   `MS` (Memory Store)
+
+### Paleta de Cores
+
+A paleta de cores foi escolhida para reforçar a identidade visual e a usabilidade:
+
+*   **Fundo:** `CupertinoColors.black`
+*   **Botões de Números:** `Color(0xFF333333)` (Cinza Escuro) - O núcleo da calculadora.
+*   **Botões de Operadores:** `CupertinoColors.systemOrange` - Cor de destaque para as ações principais.
+*   **Botões de Função (Topo):** `Color(0xFFa5a5a5)` (Cinza Claro) - Para funções secundárias.
+*   **Coluna "Sidecar" (Memória):** `Color(0xFF505050)` (Cinza Médio) - Uma cor distinta que reforça a separação funcional da área de memória.
+
+### Funcionalidades Chave
+
+*   **Cálculos Padrão:** Operações aritméticas básicas.
+*   **Funções de Memória Completas:** O aplicativo oferece um conjunto completo de ferramentas de memória, com os botões `MC` e `MR` sendo desabilitados de forma inteligente quando a memória está vazia.
+*   **Indicador de Memória:** Um indicador "M" aparece no display para fornecer feedback visual claro de que um valor está armazenado.
+*   **Botão "AC/C" Inteligente:** O botão de limpar alterna automaticamente seu rótulo e função entre "All Clear" e "Clear", dependendo do estado da entrada atual.
+*   **Layout Adaptável:** Os botões utilizam `FittedBox` para garantir que o texto se ajuste perfeitamente ao espaço disponível, prevenindo cortes visuais em diferentes tamanhos de tela.
+*   **Feedback de Operador:** O operador ativo (`÷`, `×`, `-`, `+`) é visualmente destacado para que o usuário sempre saiba qual operação está pendente.

@@ -1,117 +1,154 @@
 
-import '''package:flutter_test/flutter_test.dart''';
-// Corrected import path using the actual package name 'myapp'
-import '''package:myapp/features/calculator/presentation/provider/calculator_provider.dart''';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:myapp/features/calculator/presentation/provider/calculator_provider.dart';
 
 void main() {
-  // We use `group` to organize related tests together.
-  group('CalculatorProvider Unit Tests', () {
-    // Declare the provider instance that will be used in all tests.
-    late CalculatorProvider calculatorProvider;
+  group('CalculatorProvider State Machine Tests', () {
+    late CalculatorProvider calculator;
 
-    // `setUp` is a special function from flutter_test that runs before each test.
-    // This ensures we start with a fresh, predictable instance for every test case.
     setUp(() {
-      calculatorProvider = CalculatorProvider();
+      calculator = CalculatorProvider();
     });
 
-    test('Initial state is correct', () {
-      // Assert: Check if the initial output is '0'.
-      expect(calculatorProvider.output, '0');
-      expect(calculatorProvider.formattedOutput, '0');
+    test('1. Initial State', () {
+      expect(calculator.formattedOutput, '0');
+      expect(calculator.expressionString, '');
+      expect(calculator.isMemorySet, isFalse);
     });
 
-    test('Number entry works correctly', () {
-      // Act: Simulate pressing buttons.
-      calculatorProvider.onButtonPressed('1');
-      calculatorProvider.onButtonPressed('2');
-      calculatorProvider.onButtonPressed('3');
-
-      // Assert: Check if the output reflects the number entry.
-      expect(calculatorProvider.output, '123');
+    test('2. Number Input', () {
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('2');
+      calculator.onButtonPressed('.');
+      calculator.onButtonPressed('5');
+      expect(calculator.formattedOutput, '12.5');
     });
 
-    test('Simple addition should be calculated correctly', () {
-      // Act
-      calculatorProvider.onButtonPressed('2');
-      calculatorProvider.onButtonPressed('+');
-      calculatorProvider.onButtonPressed('3');
-      calculatorProvider.onButtonPressed('=');
-
-      // Assert
-      expect(calculatorProvider.output, '5');
+    test('3. Simple Calculation: 12 + 5 =', () {
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('2');
+      calculator.onButtonPressed('+');
+      expect(calculator.expressionString, '12 +');
+      calculator.onButtonPressed('5');
+      expect(calculator.formattedOutput, '5');
+      calculator.onButtonPressed('=');
+      expect(calculator.formattedOutput, '17');
+      expect(calculator.expressionString, '');
     });
 
-    test('Chained calculations should be handled correctly', () {
-      // Act: 10 + 5 - 3 = 12
-      calculatorProvider.onButtonPressed('1');
-      calculatorProvider.onButtonPressed('0');
-      calculatorProvider.onButtonPressed('+');
-      calculatorProvider.onButtonPressed('5');
-      calculatorProvider.onButtonPressed('='); // Intermediate result is 15
-      calculatorProvider.onButtonPressed('-');
-      calculatorProvider.onButtonPressed('3');
-      calculatorProvider.onButtonPressed('=');
-
-      // Assert
-      expect(calculatorProvider.output, '12');
+    test('4. Chained Calculation: 10 + 5 - 3 =', () {
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('0'); // 10
+      calculator.onButtonPressed('+');     // op: +, waiting for second operand
+      calculator.onButtonPressed('5');      // 5
+      calculator.onButtonPressed('-');     // Should calculate 10+5=15, then set op to -
+      expect(calculator.formattedOutput, '15');
+      expect(calculator.expressionString, '15 -');
+      calculator.onButtonPressed('3');
+      calculator.onButtonPressed('=');
+      expect(calculator.formattedOutput, '12');
+      expect(calculator.expressionString, '');
     });
 
-    test('Clear button should reset the state', () {
-      // Act
-      calculatorProvider.onButtonPressed('5');
-      calculatorProvider.onButtonPressed('×');
-      calculatorProvider.onButtonPressed('8');
-      calculatorProvider.onButtonPressed('C'); // Clear
+    test('5. Clear Entry (CE) Logic', () {
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('2'); // 12
+      calculator.onButtonPressed('+');     // op: +
+      calculator.onButtonPressed('3');
+      calculator.onButtonPressed('4'); // 34
+      
+      expect(calculator.expressionString, '12 +');
+      expect(calculator.formattedOutput, '34');
+      
+      calculator.onButtonPressed('CE');   // Clears 34
+      expect(calculator.formattedOutput, '0');
+      expect(calculator.expressionString, '12 +'); // Operation context is preserved
 
-      // Assert: Check that everything is back to its initial state.
-      expect(calculatorProvider.output, '0');
-      expect(calculatorProvider.activeOperator, '');
+      calculator.onButtonPressed('5'); // New second operand
+      calculator.onButtonPressed('=');
+      expect(calculator.formattedOutput, '17'); // 12 + 5 = 17
     });
 
-    test('Division by zero should result in an error message', () {
-      // Act
-      calculatorProvider.onButtonPressed('9');
-      calculatorProvider.onButtonPressed('÷');
-      calculatorProvider.onButtonPressed('0');
-      calculatorProvider.onButtonPressed('=');
-
-      // Assert
-      expect(calculatorProvider.output, 'Error');
+    test('6. Full Clear (C) Logic', () {
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('2');
+      calculator.onButtonPressed('+');
+      calculator.onButtonPressed('5');
+      calculator.onButtonPressed('C');
+      expect(calculator.formattedOutput, '0');
+      expect(calculator.expressionString, '');
     });
 
-    test('Backspace should remove the last digit', () {
-      // Act
-      calculatorProvider.onButtonPressed('1');
-      calculatorProvider.onButtonPressed('2');
-      calculatorProvider.onButtonPressed('3');
-      calculatorProvider.backspace();
+    test('7. Single Operand Functions (√, x², 1/x)', () {
+      // Square Root
+      calculator.onButtonPressed('9');
+      calculator.onButtonPressed('√');
+      expect(calculator.formattedOutput, '3');
+      // Allows chaining
+      calculator.onButtonPressed('+');
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('=');
+      expect(calculator.formattedOutput, '4');
 
-      // Assert
-      expect(calculatorProvider.output, '12');
+      // Square
+      calculator.onButtonPressed('C');
+      calculator.onButtonPressed('5');
+      calculator.onButtonPressed('x²');
+      expect(calculator.formattedOutput, '25');
+
+      // Reciprocal
+      calculator.onButtonPressed('C');
+      calculator.onButtonPressed('4');
+      calculator.onButtonPressed('1/x');
+      expect(calculator.formattedOutput, '0.25');
     });
 
-    test('Backspace on a single digit number should result in 0', () {
-      // Act
-      calculatorProvider.onButtonPressed('5');
-      calculatorProvider.backspace();
+    test('8. Error States (Division by Zero, Sqrt of Negative)', () {
+      // Division by Zero
+      calculator.onButtonPressed('5');
+      calculator.onButtonPressed('÷');
+      calculator.onButtonPressed('0');
+      calculator.onButtonPressed('=');
+      expect(calculator.formattedOutput, 'Error');
 
-      // Assert
-      expect(calculatorProvider.output, '0');
+      // Pressing number after error should clear
+      calculator.onButtonPressed('C'); // Clear error
+
+      // Sqrt of Negative
+      calculator.onButtonPressed('9');
+      calculator.onButtonPressed('±');
+      calculator.onButtonPressed('√');
+      expect(calculator.formattedOutput, 'Error');
     });
 
-    test('Number formatting should work for large numbers', () {
-        // Act
-        calculatorProvider.onButtonPressed('1');
-        calculatorProvider.onButtonPressed('0');
-        calculatorProvider.onButtonPressed('0');
-        calculatorProvider.onButtonPressed('0');
-        calculatorProvider.onButtonPressed('0');
-        calculatorProvider.onButtonPressed('0');
-        calculatorProvider.onButtonPressed('0');
+    test('9. Memory Functions (MS, MR, MC, M+, M-)', () {
+      // MS and MR
+      calculator.onButtonPressed('2');
+      calculator.onButtonPressed('5');
+      calculator.onButtonPressed('MS'); // Memory = 25
+      expect(calculator.isMemorySet, isTrue);
+      calculator.onButtonPressed('C');
+      calculator.onButtonPressed('MR');
+      expect(calculator.formattedOutput, '25');
+      
+      // M+
+      calculator.onButtonPressed('1');
+      calculator.onButtonPressed('0'); // Input is 10
+      calculator.onButtonPressed('M+'); // Memory = 25 + 10 = 35
+      calculator.onButtonPressed('MR');
+      expect(calculator.formattedOutput, '35');
 
-        // Assert
-        expect(calculatorProvider.formattedOutput, '1,000,000');
+      // M-
+      calculator.onButtonPressed('5'); // Input is 5
+      calculator.onButtonPressed('M-'); // Memory = 35 - 5 = 30
+      calculator.onButtonPressed('MR');
+      expect(calculator.formattedOutput, '30');
+
+      // MC
+      calculator.onButtonPressed('MC');
+      expect(calculator.isMemorySet, isFalse);
+      calculator.onButtonPressed('MR');
+      expect(calculator.formattedOutput, '0'); // Memory is now 0
     });
   });
 }
