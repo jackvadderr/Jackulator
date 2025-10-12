@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:expressions/expressions.dart';
-import 'dart:math' as math;
+import 'package:myapp/features/calculator/domain/calculator_engine.dart';
 
 enum CalculatorMode { basic, scientific }
 
@@ -12,6 +11,7 @@ class _CalculatorState {
 }
 
 class CalculatorProvider extends ChangeNotifier {
+  final CalculatorEngine _engine;
   String _expression = '';
   String _output = '0';
   double _memoryValue = 0;
@@ -26,20 +26,8 @@ class CalculatorProvider extends ChangeNotifier {
   String? _activeOperator = null;
   String? get activeOperator => _activeOperator;
 
-  // --- Dicionário de funções e constantes para o Expression Evaluator ---
-  // Uso dynamic nas closures para evitar problemas de tipagem vindos do evaluator
-  static final Map<String, dynamic> _mathContext = {
-    'sqrt': (dynamic x) => math.sqrt((x as num).toDouble()),
-    'sin': (dynamic x) => math.sin((x as num).toDouble()),
-    'cos': (dynamic x) => math.cos((x as num).toDouble()),
-    'tan': (dynamic x) => math.tan((x as num).toDouble()),
-    'ln': (dynamic x) => math.log((x as num).toDouble()),
-    'log': (dynamic x) => math.log((x as num).toDouble()) / math.ln10,
-    'pow': (dynamic a, [dynamic b]) =>
-        math.pow((a as num).toDouble(), (b as num).toDouble()),
-    'e': math.e,
-    'pi': math.pi,
-  };
+  // --- Dicionário de funções e constantes (apenas rótulos) ---
+  // O processamento real está no CalculatorEngine (camada de domínio)
 
   // --- Mapa de botões para nomes de função ---
   static const _scientificLabelToFunction = {
@@ -52,7 +40,8 @@ class CalculatorProvider extends ChangeNotifier {
     'x²': 'pow',
   };
 
-  CalculatorProvider() {
+  CalculatorProvider({CalculatorEngine? engine})
+    : _engine = engine ?? const CalculatorEngine() {
     _saveState();
     // garante que a UI receba o estado inicial logo após o Provider ser criado (evita race em testes)
     Future.microtask(() => notifyListeners());
@@ -66,7 +55,6 @@ class CalculatorProvider extends ChangeNotifier {
 
   String get formattedOutput {
     // garantia: sempre retornar string amigável (nunca null)
-    if (_output == null) return '0';
     if (_output.contains('e'))
       return _output; // Não formatar notação científica
     if (_output == 'Error') return 'Error';
@@ -298,15 +286,10 @@ class CalculatorProvider extends ChangeNotifier {
         finalExpression += List.filled(openParen - closeParen, ')').join();
       }
 
-      final parsed = Expression.parse(finalExpression);
-      final evaluator = const ExpressionEvaluator();
-      final dynamic result = evaluator.eval(parsed, _mathContext);
-
-      num resultNum;
-      if (result is num)
-        resultNum = result;
-      else
-        resultNum = num.tryParse(result.toString()) ?? double.nan;
+      final num? resultNum = _engine.evaluate(finalExpression);
+      if (resultNum == null || resultNum.isNaN || resultNum.isInfinite) {
+        throw StateError('Invalid evaluation');
+      }
 
       final displayExpr = finalExpression
           .replaceAll('*', '×')

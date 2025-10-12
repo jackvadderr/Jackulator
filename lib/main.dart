@@ -1,9 +1,9 @@
+import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
 
-import '''package:flutter/cupertino.dart''';
-import '''package:provider/provider.dart''';
-
-import '''./features/calculator/presentation/provider/calculator_provider.dart''';
-import '''./features/calculator/presentation/screens/calculator_screen.dart''';
+import 'features/calculator/presentation/provider/calculator_provider.dart';
+import 'features/calculator/presentation/theme/app_theme.dart';
+import 'home.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,20 +14,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ChangeNotifierProvider is the widget that provides an instance of a
-    // ChangeNotifier to its descendants. It is the "injection" part.
     return ChangeNotifierProvider(
       create: (context) => CalculatorProvider(),
-      child: const CupertinoApp(
+      child: CupertinoApp(
         title: 'Jackulator',
-        theme: CupertinoThemeData(
-          primaryColor: CupertinoColors.systemOrange,
-          scaffoldBackgroundColor: CupertinoColors.black,
-          textTheme: CupertinoTextThemeData(
-            textStyle: TextStyle(fontFamily: 'SF-Pro-Display'),
-          ),
-        ),
-        home: CalculatorScreen(),
+        theme: AppTheme.cupertino,
+        home: const CalculatorHome(),
       ),
     );
   }
