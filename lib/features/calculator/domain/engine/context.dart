@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'errors.dart';
 import 'values.dart';
 
 /// Modo de ângulo para funções trigonométricas
@@ -69,17 +70,17 @@ class EvaluationContext {
 
   static Map<String, Value> _defaultMemory() {
     return {
-      'ANS': NumberValue(0),
-      'M0': NumberValue(0),
-      'M1': NumberValue(0),
-      'M2': NumberValue(0),
-      'M3': NumberValue(0),
-      'M4': NumberValue(0),
-      'M5': NumberValue(0),
-      'M6': NumberValue(0),
-      'M7': NumberValue(0),
-      'M8': NumberValue(0),
-      'M9': NumberValue(0),
+      'ANS': const NumberValue(0),
+      'M0': const NumberValue(0),
+      'M1': const NumberValue(0),
+      'M2': const NumberValue(0),
+      'M3': const NumberValue(0),
+      'M4': const NumberValue(0),
+      'M5': const NumberValue(0),
+      'M6': const NumberValue(0),
+      'M7': const NumberValue(0),
+      'M8': const NumberValue(0),
+      'M9': const NumberValue(0),
     };
   }
 
@@ -178,8 +179,11 @@ class EvaluationContext {
       maxArity: 1,
       implementation: (args, ctx) {
         final x = _toNumber(args[0]);
-        if (x < 0 && ctx.engineMode != EngineMode.scientific) {
-          return ComplexValue(0, math.sqrt(-x));
+        if (x < 0) {
+          throw EvaluationError.domainError(
+            'Square root of negative number is not defined in real domain',
+            null,
+          );
         }
         return NumberValue(math.sqrt(x));
       },
@@ -303,24 +307,25 @@ class EvaluationContext {
   bool hasVariable(String name) => _variables.containsKey(name);
   Map<String, Value> get variables => Map.unmodifiable(_variables);
 
-  // Constantes
-  num? getConstant(String name) => _constants[name.toLowerCase()];
-  bool hasConstant(String name) => _constants.containsKey(name.toLowerCase());
+  // Constantes (case-sensitive)
+  num? getConstant(String name) => _constants[name];
+  bool hasConstant(String name) => _constants.containsKey(name);
 
   // Memória
   Value? getMemory(String name) => _memoryRegisters[name];
   void setMemory(String name, Value value) => _memoryRegisters[name] = value;
   void addToMemory(String name, Value delta) {
-    final current = _memoryRegisters[name] ?? NumberValue(0);
+    final current = _memoryRegisters[name] ?? const NumberValue(0);
     if (current is NumberValue && delta is NumberValue) {
       _memoryRegisters[name] = NumberValue(current.rawValue + delta.rawValue);
     }
   }
 
-  void clearMemory(String name) => _memoryRegisters[name] = NumberValue(0);
+  void clearMemory(String name) =>
+      _memoryRegisters[name] = const NumberValue(0);
   void clearAllMemory() {
     for (final key in _memoryRegisters.keys) {
-      _memoryRegisters[key] = NumberValue(0);
+      _memoryRegisters[key] = const NumberValue(0);
     }
   }
 

@@ -83,7 +83,6 @@ class Parser {
   }
 
   /// Expressão (nível mais baixo de precedência)
-  /// assignment | comparison
   AstNode _parseExpression() {
     return _parseAssignment();
   }
@@ -123,12 +122,9 @@ class Parser {
     return expr;
   }
 
-  /// Operadores lógicos OR
   AstNode _parseLogicalOr() {
     var expr = _parseLogicalAnd();
-
     while (_match([TokenType.or])) {
-      final op = _previous();
       final right = _parseLogicalAnd();
       expr = BinaryOpNode(
         operator: '||',
@@ -137,16 +133,12 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores lógicos AND
   AstNode _parseLogicalAnd() {
     var expr = _parseComparison();
-
     while (_match([TokenType.and])) {
-      final op = _previous();
       final right = _parseComparison();
       expr = BinaryOpNode(
         operator: '&&',
@@ -155,14 +147,11 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores de comparação
   AstNode _parseComparison() {
     var expr = _parseBitwiseOr();
-
     while (_match([
       TokenType.less,
       TokenType.lessEqual,
@@ -180,16 +169,12 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores bitwise OR
   AstNode _parseBitwiseOr() {
     var expr = _parseBitwiseXor();
-
     while (_match([TokenType.bitwiseOr])) {
-      final op = _previous();
       final right = _parseBitwiseXor();
       expr = BinaryOpNode(
         operator: '|',
@@ -198,16 +183,13 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores bitwise XOR
   AstNode _parseBitwiseXor() {
     var expr = _parseBitwiseAnd();
-
+    // Note: XOR token may not be produced; reserved for future use
     while (_match([TokenType.bitwiseXor])) {
-      final op = _previous();
       final right = _parseBitwiseAnd();
       expr = BinaryOpNode(
         operator: '^',
@@ -216,16 +198,12 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores bitwise AND
   AstNode _parseBitwiseAnd() {
     var expr = _parseBitwiseShift();
-
     while (_match([TokenType.bitwiseAnd])) {
-      final op = _previous();
       final right = _parseBitwiseShift();
       expr = BinaryOpNode(
         operator: '&',
@@ -234,14 +212,11 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
-  /// Operadores bitwise shift
   AstNode _parseBitwiseShift() {
     var expr = _parseAddition();
-
     while (_match([TokenType.leftShift, TokenType.rightShift])) {
       final op = _previous();
       final right = _parseAddition();
@@ -252,14 +227,12 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
   /// Adição e subtração
   AstNode _parseAddition() {
     var expr = _parseMultiplication();
-
     while (_match([TokenType.plus, TokenType.minus])) {
       final op = _previous();
       final right = _parseMultiplication();
@@ -270,23 +243,49 @@ class Parser {
         span: _combineSpans(expr.span, right.span),
       );
     }
-
     return expr;
   }
 
   /// Multiplicação, divisão e módulo
   AstNode _parseMultiplication() {
-    var expr = _parsePower();
+    var expr = _parseUnaryPrefix();
 
-    while (_match([TokenType.multiply, TokenType.divide, TokenType.percent])) {
-      final op = _previous();
-      final right = _parsePower();
-      expr = BinaryOpNode(
-        operator: op.raw,
-        left: expr,
-        right: right,
-        span: _combineSpans(expr.span, right.span),
-      );
+    while (true) {
+      // '*' and '/'
+      if (_match([TokenType.multiply, TokenType.divide])) {
+        final op = _previous();
+        final right = _parseUnaryPrefix();
+        expr = BinaryOpNode(
+          operator: op.raw,
+          left: expr,
+          right: right,
+          span: _combineSpans(expr.span, right.span),
+        );
+        continue;
+      }
+
+      // '%' as binary modulo only if followed by an operand
+      if (_check(TokenType.percent)) {
+        // Lookahead to ensure binary form (has right operand)
+        final next = tokens[_current + 1];
+        final hasRightOperand =
+            next.type == TokenType.number ||
+            next.type == TokenType.identifier ||
+            next.type == TokenType.leftParen;
+        if (hasRightOperand) {
+          _advance(); // consume '%'
+          final right = _parseUnaryPrefix();
+          expr = BinaryOpNode(
+            operator: '%',
+            left: expr,
+            right: right,
+            span: _combineSpans(expr.span, right.span),
+          );
+          continue;
+        }
+      }
+
+      break;
     }
 
     // Multiplicação implícita
@@ -294,7 +293,7 @@ class Parser {
       while (_check(TokenType.number) ||
           _check(TokenType.identifier) ||
           _check(TokenType.leftParen)) {
-        final right = _parsePower();
+        final right = _parseUnaryPrefix();
         expr = BinaryOpNode(
           operator: '*',
           left: expr,
@@ -307,12 +306,11 @@ class Parser {
     return expr;
   }
 
-  /// Exponenciação (associativa à direita)
+  /// Exponenciação (associativa à direita), de maior precedência que unários prefixos
   AstNode _parsePower() {
-    var expr = _parseUnary();
+    var expr = _parsePostfix();
 
     if (_match([TokenType.power])) {
-      final op = _previous();
       final right = _parsePower(); // Right associative
       expr = BinaryOpNode(
         operator: '^',
@@ -325,16 +323,16 @@ class Parser {
     return expr;
   }
 
-  /// Operadores unários (prefixo)
-  AstNode _parseUnary() {
+  /// Operadores unários (prefixo): têm menor precedência que potência
+  AstNode _parseUnaryPrefix() {
     if (_match([
+      // Removed unary plus to avoid accepting sequences like '++'
       TokenType.minus,
-      TokenType.plus,
       TokenType.bitwiseNot,
       TokenType.not,
     ])) {
       final op = _previous();
-      final right = _parseUnary();
+      final right = _parseUnaryPrefix();
       return UnaryOpNode(
         operator: op.raw,
         operand: right,
@@ -343,7 +341,8 @@ class Parser {
       );
     }
 
-    return _parsePostfix();
+    // Base case: potência/postfix
+    return _parsePower();
   }
 
   /// Operadores unários (postfixo)
@@ -351,7 +350,7 @@ class Parser {
     var expr = _parsePrimary();
 
     while (true) {
-      // Se próximo token é factorial, sempre postfix
+      // Factorial postfix
       if (_match([TokenType.factorial])) {
         final op = _previous();
         expr = UnaryOpNode(
@@ -363,17 +362,15 @@ class Parser {
         continue;
       }
 
-      // % pode ser postfix (percent) OU binário (módulo)
-      // Se houver um operando válido à direita (number/identifier/leftParen),
-      // NÃO consome como postfix aqui; deixe para multiplicação tratar como binário
+      // Percent can be postfix OR binary (modulo)
       if (_check(TokenType.percent)) {
+        // Lookahead to decide postfix vs binary
         final next = tokens[_current + 1];
         final hasRightOperand =
             next.type == TokenType.number ||
             next.type == TokenType.identifier ||
             next.type == TokenType.leftParen;
         if (!hasRightOperand) {
-          // Consumir como postfix percent
           _advance();
           final op = _previous();
           expr = UnaryOpNode(

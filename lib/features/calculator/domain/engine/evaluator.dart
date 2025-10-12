@@ -434,6 +434,7 @@ class Evaluator implements AstVisitor<Value> {
     throw EvaluationError.typeMismatch('integer', value.type.name, span);
   }
 
+  // ignore: unused_element
   void _addDiagnostic(Diagnostic diagnostic) {
     _diagnostics.add(diagnostic);
   }
