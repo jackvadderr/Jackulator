@@ -4,6 +4,8 @@ import 'package:myapp/features/calculator/domain/calculator_engine.dart';
 
 enum CalculatorMode { basic, scientific }
 
+enum AngleUnit { degrees, radians }
+
 class _CalculatorState {
   final String expression;
   final String output;
@@ -17,6 +19,7 @@ class CalculatorProvider extends ChangeNotifier {
   List<String> _calculationHistory = [];
   CalculatorMode _mode = CalculatorMode.basic;
   bool _justEvaluated = false;
+  AngleUnit _angleUnit = AngleUnit.degrees;
 
   List<_CalculatorState> _stateHistory = [];
   int _currentStateIndex = -1;
@@ -52,6 +55,19 @@ class CalculatorProvider extends ChangeNotifier {
     return _expression.replaceAll('*', '×').replaceAll('/', '÷');
   }
 
+  // Exibir na segunda linha: expressão + o que estiver sendo digitado agora (quando aplicável)
+  String get liveDisplayExpression {
+    final exprPretty = displayExpression;
+    final isTyping = !_justEvaluated && _output != '0' && _output != 'Error';
+    if (isTyping || _output == '-') {
+      return exprPretty + _output.replaceAll('*', '×').replaceAll('/', '÷');
+    }
+    return exprPretty;
+  }
+
+  // Se devemos mostrar o resultado na terceira parte (nunca mostrar enquanto digitamos)
+  bool get hasResultForDisplay => _justEvaluated || _output == 'Error';
+
   String get formattedOutput {
     // garantia: sempre retornar string amigável (nunca null)
     if (_output.contains('e'))
@@ -65,6 +81,9 @@ class CalculatorProvider extends ChangeNotifier {
       return _output;
     }
   }
+
+  String get angleUnitLabel => _angleUnit == AngleUnit.degrees ? 'DEG' : 'RAD';
+  AngleUnit get angleUnit => _angleUnit;
 
   bool get isMemorySet {
     final mem = _engine.getMemory('M0');
@@ -89,7 +108,25 @@ class CalculatorProvider extends ChangeNotifier {
     }
   }
 
+  void setAngleUnit(AngleUnit unit) {
+    if (_angleUnit != unit) {
+      _angleUnit = unit;
+      notifyListeners();
+    }
+  }
+
+  void toggleAngleUnit() {
+    _angleUnit = _angleUnit == AngleUnit.degrees
+        ? AngleUnit.radians
+        : AngleUnit.degrees;
+    notifyListeners();
+  }
+
   void onButtonPressed(String value) {
+    if (value == 'DEL') {
+      backspace();
+      return;
+    }
     if ('0123456789.'.contains(value)) {
       _handleNumber(value);
     } else if (['+', '-', '×', '÷', '*', '/'].contains(value)) {
@@ -274,17 +311,81 @@ class CalculatorProvider extends ChangeNotifier {
   void _handleEquals() {
     if (_output == 'Error') return;
 
+    // Build a working copy that includes any pending output
+    String exprWithOutput = _expression;
     if (_output != '0' && _output != 'Error') {
-      if (!(_expression.isNotEmpty &&
-          _expression.substring(_expression.length - 1) == ')')) {
-        _expression += _output;
+      if (!(exprWithOutput.isNotEmpty &&
+          exprWithOutput.substring(exprWithOutput.length - 1) == ')')) {
+        exprWithOutput += _output;
       }
     }
 
-    if (_expression.isEmpty) return;
+    if (exprWithOutput.isEmpty) return;
 
     try {
-      String finalExpression = _expression;
+      // Expression shown to the user (keeps '%')
+      final displayExpr = exprWithOutput
+          .replaceAll('*', '×')
+          .replaceAll('/', '÷');
+
+      // Expression for engine: convert percent tokens
+      String finalExpression = exprWithOutput;
+
+      // 1) number% -> (number/100)
+      finalExpression = finalExpression.replaceAllMapped(
+        RegExp(r'(-?\d+(?:\.\d+)?)%'),
+        (m) => '(${m[1]}/100)',
+      );
+
+      // 2) (expr)% or func(args)% -> ((...)/100)
+      String convertParenPercents(String s) {
+        int idx;
+        while ((idx = s.indexOf(')%')) != -1) {
+          final close = idx; // pos of ')'
+          int depth = 0;
+          int open = -1;
+          for (int i = close; i >= 0; i--) {
+            final ch = s[i];
+            if (ch == ')')
+              depth++;
+            else if (ch == '(') {
+              depth--;
+              if (depth == 0) {
+                open = i;
+                break;
+              }
+            }
+          }
+          if (open == -1) break;
+
+          // include optional function name immediately before '('
+          int start = open;
+          while (start - 1 >= 0) {
+            final prev = s[start - 1];
+            final code = prev.codeUnitAt(0);
+            final isAlphaNum =
+                (code >= 48 && code <= 57) ||
+                (code >= 65 && code <= 90) ||
+                (code >= 97 && code <= 122) ||
+                prev == '_';
+            if (isAlphaNum) {
+              start--;
+              continue;
+            }
+            break;
+          }
+
+          final operand = s.substring(start, close + 1);
+          final before = s.substring(0, start);
+          final after = s.substring(idx + 2);
+          s = '$before($operand/100)$after';
+        }
+        return s;
+      }
+
+      finalExpression = convertParenPercents(finalExpression);
+
+      // Balance parentheses if needed
       final openParen = '('.allMatches(finalExpression).length;
       final closeParen = ')'.allMatches(finalExpression).length;
       if (openParen > closeParen) {
@@ -310,10 +411,6 @@ class CalculatorProvider extends ChangeNotifier {
         formattedResult = v.toString();
       }
 
-      final displayExpr = finalExpression
-          .replaceAll('*', '×')
-          .replaceAll('/', '÷');
-
       _calculationHistory.add('$displayExpr = $formattedResult');
       _output = formattedResult;
       _expression = '';
@@ -331,10 +428,31 @@ class CalculatorProvider extends ChangeNotifier {
 
   void _handlePercentage() {
     if (_output == 'Error') return;
-    final val = (double.tryParse(_output.replaceAll(',', '')) ?? 0) / 100;
-    _output = _formatResult(val);
-    _justEvaluated = true;
-    notifyListeners();
+    final current = _output.replaceAll(',', '');
+
+    if (_justEvaluated) {
+      // Keep display as "x%" and only convert on '='
+      _expression = '${current}%';
+      _output = '0';
+      _justEvaluated = false;
+      _activeOperator = null;
+      return;
+    }
+
+    // If we're typing a number, append number%
+    if (_output != '0' && _output != '-') {
+      _expression += '${current}%';
+      _output = '0';
+      return;
+    }
+
+    // If last token is a parenthesized expression, append % to it
+    if (_expression.isNotEmpty && _expression.endsWith(')')) {
+      // Avoid duplicate %
+      if (!_expression.endsWith(')%')) {
+        _expression += '%';
+      }
+    }
   }
 
   void _handleSign() {
