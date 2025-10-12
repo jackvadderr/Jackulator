@@ -14,7 +14,6 @@ class CalculatorProvider extends ChangeNotifier {
   final CalculatorEngine _engine;
   String _expression = '';
   String _output = '0';
-  double _memoryValue = 0;
   List<String> _calculationHistory = [];
   CalculatorMode _mode = CalculatorMode.basic;
   bool _justEvaluated = false;
@@ -41,7 +40,7 @@ class CalculatorProvider extends ChangeNotifier {
   };
 
   CalculatorProvider({CalculatorEngine? engine})
-    : _engine = engine ?? const CalculatorEngine() {
+    : _engine = engine ?? CalculatorEngine() {
     _saveState();
     // garante que a UI receba o estado inicial logo após o Provider ser criado (evita race em testes)
     Future.microtask(() => notifyListeners());
@@ -67,7 +66,13 @@ class CalculatorProvider extends ChangeNotifier {
     }
   }
 
-  bool get isMemorySet => _memoryValue != 0;
+  bool get isMemorySet {
+    final mem = _engine.getMemory('M0');
+    if (mem is NumberValue) return mem.rawValue != 0;
+    if (mem is IntegerValue) return mem.rawValue != 0;
+    return false;
+  }
+
   String get clearButtonLabel =>
       (_output == '0' && _expression.isEmpty && !_justEvaluated) ? 'AC' : 'C';
   List<String> get calculationHistory => List.unmodifiable(_calculationHistory);
@@ -286,16 +291,28 @@ class CalculatorProvider extends ChangeNotifier {
         finalExpression += List.filled(openParen - closeParen, ')').join();
       }
 
-      final num? resultNum = _engine.evaluate(finalExpression);
-      if (resultNum == null || resultNum.isNaN || resultNum.isInfinite) {
+      final eval = _engine.evaluate(finalExpression);
+      if (!eval.success || eval.value == null) {
         throw StateError('Invalid evaluation');
+      }
+
+      // Tratar diferentes tipos de valores
+      String formattedResult;
+      final v = eval.value!;
+      if (v is NumberValue) {
+        formattedResult = _formatResult(v.rawValue);
+      } else if (v is IntegerValue) {
+        formattedResult = _formatResult(v.rawValue);
+      } else if (v is BooleanValue) {
+        formattedResult = v.rawValue.toString();
+      } else {
+        // Para outros tipos, usa string direta
+        formattedResult = v.toString();
       }
 
       final displayExpr = finalExpression
           .replaceAll('*', '×')
           .replaceAll('/', '÷');
-
-      final formattedResult = _formatResult(resultNum);
 
       _calculationHistory.add('$displayExpr = $formattedResult');
       _output = formattedResult;
@@ -357,20 +374,27 @@ class CalculatorProvider extends ChangeNotifier {
     final currentOutput = double.tryParse(_output.replaceAll(',', '')) ?? 0;
     switch (value) {
       case 'MC':
-        _memoryValue = 0;
+        _engine.clearMemory('M0');
         break;
       case 'MR':
-        _output = _formatResult(_memoryValue);
+        final mem = _engine.getMemory('M0');
+        if (mem is NumberValue) {
+          _output = _formatResult(mem.rawValue);
+        } else if (mem is IntegerValue) {
+          _output = _formatResult(mem.rawValue);
+        } else {
+          _output = '0';
+        }
         _justEvaluated = true;
         break;
       case 'M+':
-        _memoryValue += currentOutput;
+        _engine.addToMemory('M0', NumberValue(currentOutput));
         break;
       case 'M-':
-        _memoryValue -= currentOutput;
+        _engine.addToMemory('M0', NumberValue(-currentOutput));
         break;
       case 'MS':
-        _memoryValue = currentOutput;
+        _engine.setMemory('M0', NumberValue(currentOutput));
         break;
     }
     notifyListeners();

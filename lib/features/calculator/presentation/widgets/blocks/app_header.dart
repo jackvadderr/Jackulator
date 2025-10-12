@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
-import '../../theme/app_text_styles.dart';
+import '../components/title_text.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -20,7 +20,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       color: AppColors.surface,
       child: Row(
         children: [
-          Expanded(child: Text(title, style: AppTextStyles.heading)),
+          Expanded(child: TitleText(title)),
           if (actions != null) ...actions!,
         ],
       ),

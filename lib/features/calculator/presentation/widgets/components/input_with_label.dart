@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
+import '../base/text_label.dart';
 
 class InputWithLabel extends StatelessWidget {
   final String label;
@@ -23,7 +24,7 @@ class InputWithLabel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.label),
+          TextLabel(label, style: AppTextStyles.label),
           SizedBox(height: AppSpacing.xs),
           TextField(
             controller: controller,
