@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:myapp/features/calculator/domain/calculator_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../adapter/engine_adapter.dart';
 import '../input/commands.dart';
@@ -12,9 +13,11 @@ enum CalculatorMode { basic, scientific }
 
 enum AngleUnit { degrees, radians }
 
+enum NavTab { basic, advanced, scientific, settings, history }
+
 class CalculatorProvider extends ChangeNotifier {
   final CalculatorEngine _engine;
-  final EngineAdapter _adapter;
+  late final EngineAdapter _adapter;
 
   // Tokenized editor state for input layer
   final Editor _editor = Editor();
@@ -26,6 +29,7 @@ class CalculatorProvider extends ChangeNotifier {
 
   CalculatorMode _mode = CalculatorMode.basic;
   AngleUnit _angleUnit = AngleUnit.degrees;
+  NavTab _navTab = NavTab.basic;
 
   // --- Scientific labels map ---
   static const _scientificLabelToFunction = {
@@ -39,10 +43,33 @@ class CalculatorProvider extends ChangeNotifier {
   };
 
   CalculatorProvider({CalculatorEngine? engine})
-    : _engine = engine ?? CalculatorEngine(),
-      _adapter = EngineAdapter(engine ?? CalculatorEngine()) {
-    // Initial notify to sync UI
-    Future.microtask(() => notifyListeners());
+    : _engine = engine ?? CalculatorEngine() {
+    _adapter = EngineAdapter(_engine);
+    _engine.setAngleMode(
+      _angleUnit == AngleUnit.degrees ? AngleMode.degrees : AngleMode.radians,
+    );
+
+    Future.microtask(() async {
+      await _loadPrefs();
+      notifyListeners();
+    });
+  }
+
+  Future<void> _loadPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tabIndex = prefs.getInt('nav_tab');
+      if (tabIndex != null &&
+          tabIndex >= 0 &&
+          tabIndex < NavTab.values.length) {
+        _navTab = NavTab.values[tabIndex];
+        if (_navTab == NavTab.basic) {
+          _mode = CalculatorMode.basic;
+        } else if (_navTab == NavTab.scientific || _navTab == NavTab.advanced) {
+          _mode = CalculatorMode.scientific;
+        }
+      }
+    } catch (_) {}
   }
 
   // --- Live preview ---
@@ -53,6 +80,8 @@ class CalculatorProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  bool get livePreviewEnabled => _livePreviewEnabled;
 
   String? get livePreviewValue {
     if (!_livePreviewEnabled) return null;
@@ -90,19 +119,53 @@ class CalculatorProvider extends ChangeNotifier {
   bool get canRedo => _editorState.redoStack.isNotEmpty;
 
   CalculatorMode get mode => _mode;
+  NavTab get navTab => _navTab;
+
+  // Expor histórico rico da engine
+  List<HistoryEntry> get engineHistory => _engine.listHistory();
 
   // --- Actions ---
-  void setMode(CalculatorMode newMode) {
+  void setNavTab(NavTab tab) {
+    if (_navTab != tab) {
+      _navTab = tab;
+      if (tab == NavTab.basic) {
+        setMode(CalculatorMode.basic, silent: true);
+      } else if (tab == NavTab.scientific) {
+        setMode(CalculatorMode.scientific, silent: true);
+      } else if (tab == NavTab.advanced) {
+        setMode(CalculatorMode.scientific, silent: true);
+      }
+      SharedPreferences.getInstance().then((p) {
+        p.setInt('nav_tab', _navTab.index);
+      });
+      notifyListeners();
+    }
+  }
+
+  void clearEngineHistory({bool includePinned = false}) {
+    _engine.clearHistory(includePinned: includePinned);
+    notifyListeners();
+  }
+
+  void togglePinHistory(String id) {
+    _engine.history.togglePin(id);
+    notifyListeners();
+  }
+
+  void setMode(CalculatorMode newMode, {bool silent = false}) {
     if (_mode != newMode) {
       _resetAll();
       _mode = newMode;
-      notifyListeners();
+      if (!silent) notifyListeners();
     }
   }
 
   void setAngleUnit(AngleUnit unit) {
     if (_angleUnit != unit) {
       _angleUnit = unit;
+      _engine.setAngleMode(
+        unit == AngleUnit.degrees ? AngleMode.degrees : AngleMode.radians,
+      );
       notifyListeners();
     }
   }
@@ -111,6 +174,9 @@ class CalculatorProvider extends ChangeNotifier {
     _angleUnit = _angleUnit == AngleUnit.degrees
         ? AngleUnit.radians
         : AngleUnit.degrees;
+    _engine.setAngleMode(
+      _angleUnit == AngleUnit.degrees ? AngleMode.degrees : AngleMode.radians,
+    );
     notifyListeners();
   }
 
@@ -124,12 +190,12 @@ class CalculatorProvider extends ChangeNotifier {
         value == '%')
       willEdit = true;
     if (!willEdit && '0123456789'.contains(value)) willEdit = true;
-    if (!willEdit && ['+', '-', '×', '÷', '^', '±'].contains(value))
+    if (!willEdit && ['+', '-', '×', '÷', '^', '\u00b1'].contains(value))
       willEdit = true;
     if (!willEdit && _scientificLabelToFunction.containsKey(value))
       willEdit = true;
 
-    if (_result != null && willEdit && value != '±') {
+    if (_result != null && willEdit && value != '\u00b1') {
       // Start a fresh expression after a completed result
       _editorState = EditorState.empty();
       _result = null;
@@ -145,7 +211,7 @@ class CalculatorProvider extends ChangeNotifier {
       _handleClear();
       return;
     }
-    if (value == '±') {
+    if (value == '\u00b1') {
       _editorState = _editor.apply(_editorState, ToggleSignCmd());
       _result = null; // editing
       notifyListeners();
@@ -181,8 +247,26 @@ class CalculatorProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (['+', '-', '×', '÷', '^'].contains(value)) {
+    if ([
+      '+',
+      '-',
+      '×',
+      '÷',
+      '^',
+      '&',
+      '|',
+      '<<',
+      '>>',
+      '&&',
+      '||',
+    ].contains(value)) {
       _editorState = _editor.apply(_editorState, InsertOperator(value));
+      _result = null;
+      notifyListeners();
+      return;
+    }
+    if (value == '~') {
+      _editorState = _editor.apply(_editorState, InsertOperator('~'));
       _result = null;
       notifyListeners();
       return;

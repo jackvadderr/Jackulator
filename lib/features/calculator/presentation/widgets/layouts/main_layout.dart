@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../theme/app_colors.dart';
-import '../blocks/app_footer.dart';
 import '../blocks/app_header.dart';
 
 class MainLayout extends StatelessWidget {
@@ -22,15 +21,19 @@ class MainLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: AppColors.background,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            AppHeader(title: title, actions: actions),
-            Expanded(child: child),
-            AppFooter(child: footerChild),
-          ],
-        ),
+      child: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                AppHeader(title: title, actions: actions),
+                Expanded(child: child),
+              ],
+            ),
+          ),
+          if (footerChild != null) footerChild!,
+        ],
       ),
     );
   }

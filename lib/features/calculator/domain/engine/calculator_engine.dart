@@ -9,7 +9,8 @@ import 'values.dart';
 
 /// API principal da calculadora
 class CalculatorEngine {
-  final EvaluationContext context;
+  EvaluationContext
+  context; // tornamos mutável para permitir atualizar angleMode
   final History history;
   final LexerConfig lexerConfig;
   final p.ParserConfig parserConfig;
@@ -135,12 +136,14 @@ class CalculatorEngine {
 
   /// Muda o modo de ângulo
   void setAngleMode(AngleMode mode) {
-    // No momento, o contexto é imutável neste objeto. Exporá novo contexto via factory futuramente.
+    // Atualiza o contexto para refletir o novo modo de ângulo
+    context = context.copyWith(angleMode: mode);
   }
 
   /// Muda o modo da engine
   void setEngineMode(EngineMode mode) {
-    // No momento, o contexto é imutável neste objeto. Exporá novo contexto via factory futuramente.
+    // Atualiza o contexto para refletir o novo modo da engine
+    context = context.copyWith(engineMode: mode);
   }
 
   void _addToHistory(String expression, AstNode? ast, EvaluationResult result) {

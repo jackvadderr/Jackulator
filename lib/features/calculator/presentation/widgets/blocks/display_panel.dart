@@ -10,6 +10,7 @@ class DisplayPanel extends StatelessWidget {
   final String expression; // Part 2 (live typing)
   final String result; // Part 3 (computed result)
   final String? bottomInfo; // Part 4 (info)
+  final VoidCallback? onToggleAngleUnit;
 
   const DisplayPanel({
     super.key,
@@ -17,6 +18,7 @@ class DisplayPanel extends StatelessWidget {
     required this.expression,
     required this.result,
     this.bottomInfo,
+    this.onToggleAngleUnit,
   });
 
   @override
@@ -31,10 +33,14 @@ class DisplayPanel extends StatelessWidget {
             height: 20,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: DisplayText(
-                angleUnitLabel,
-                style: AppTextStyles.caption,
-                textAlign: TextAlign.left,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggleAngleUnit,
+                child: DisplayText(
+                  angleUnitLabel,
+                  style: AppTextStyles.caption,
+                  textAlign: TextAlign.left,
+                ),
               ),
             ),
           ),
